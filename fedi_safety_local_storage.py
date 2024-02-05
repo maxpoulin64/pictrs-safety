@@ -26,6 +26,10 @@ args = arg_parser.parse_args()
 
 
 def check_and_delete_filename(file_details):
+    if database.is_image_checked(file_details["key"]):
+        print(f"Already checked {file_details['key']}")
+        return
+
     is_csam = False
     try:
         image: PIL.Image.Image = local_storage.load_image(str(file_details["filepath"]))
@@ -34,28 +38,19 @@ def check_and_delete_filename(file_details):
         else:
             is_csam = check_image(image)
     except UnidentifiedImageError:
-        logger.warning("Image could not be read. Returning it as CSAM to be sure.")
-        is_csam = True
-    if is_csam and not args.dry_run:
-        local_storage.delete_image(str(file_details["filepath"]))
-    return is_csam, file_details
+        # logger.warning("Image could not be read. Returning it as CSAM to be sure.")
+        is_csam = False
+
+    if is_csam:
+        if not args.dry_run:
+            local_storage.delete_image(str(file_details["filepath"]))
+
+    database.record_image(file_details["key"],csam=is_csam)
 
 def run_cleanup(cutoff_time = None):
     with ThreadPoolExecutor(max_workers=args.threads) as executor:
-        futures = []
         for file_details in local_storage.get_all_images(cutoff_time):
-            if not database.is_image_checked(file_details["key"]):
-                futures.append(executor.submit(check_and_delete_filename, file_details))
-            if len(futures) >= 500:
-                for future in futures:
-                    result, fdetails = future.result()
-                    database.record_image(fdetails["key"],csam=result)
-                logger.info(f"Safety Checked Images: {len(futures)}")
-                futures = []
-        for future in futures:
-            result, fdetails = future.result()
-            database.record_image(fdetails["key"],csam=result)
-        logger.info(f"Safety Checked Images: {len(futures)}")    
+            executor.submit(check_and_delete_filename, file_details)
 
 if __name__ == "__main__":
     if args.all:

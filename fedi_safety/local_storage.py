@@ -14,25 +14,18 @@ if local_base_directory is None:
     sys.exit(1)
 
 def get_all_images(min_date=None):
-    filelist = []
-    def list_files_recursively(local_directory):
-        for root, _, files in os.walk(local_directory):
-            for file_name in files:
-                file_path = os.path.join(root, file_name)
-                modify_time = datetime.datetime.fromtimestamp(os.path.getmtime(file_path), tz=datetime.timezone.utc)
+    for root, _, files in os.walk(local_base_directory):
+        for file_name in files:
+            file_path = os.path.join(root, file_name)
+            modify_time = datetime.datetime.fromtimestamp(os.path.getmtime(file_path), tz=datetime.timezone.utc)
 
-                if min_date is None or modify_time >= min_date:
-                    relative_path = Path(file_path).relative_to(local_base_directory)
-                    filelist.append(
-                        {
-                            "key": str(relative_path),
-                            "filepath": Path(file_path),
-                            "mtime": modify_time,
-                        }
-                    )
-
-    list_files_recursively(local_base_directory)
-    return filelist
+            if min_date is None or modify_time >= min_date:
+                relative_path = Path(file_path).relative_to(local_base_directory)
+                yield {
+                    "key": str(relative_path),
+                    "filepath": Path(file_path),
+                    "mtime": modify_time,
+                }
 
 def load_image(local_path):
     with open(local_path, "rb") as local_file:
